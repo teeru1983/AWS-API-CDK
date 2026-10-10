@@ -19,6 +19,9 @@ export interface ApiStackProps
 export class ApiStack
   extends cdk.Stack {
 
+  public readonly api:
+    apigateway.RestApi;
+
   constructor(
     scope: Construct,
     id: string,
@@ -62,6 +65,8 @@ export class ApiStack
           },
         }
       );
+
+    this.api = api;
 
     /*
      * =====================================================

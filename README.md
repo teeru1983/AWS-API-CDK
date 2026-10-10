@@ -47,6 +47,7 @@ flowchart TB
 | `DatabaseStack` | RDS PostgreSQL instance, auto-generated Secrets Manager secret, RDS security group | Application's relational data store |
 | `ComputeStack` | Business Lambda (in VPC, queries RDS), Authorizer Lambda (validates requests) | Application logic |
 | `ApiStack` | Regional REST API, `TokenAuthorizer`, `GET /hello` method | Public HTTP entry point |
+| `WafStack` *(opt-in, not deployed by default)* | Regional WAF Web ACL (`AWSManagedRulesCommonRuleSet`) associated with the API stage | Basic OWASP-style protection for externally-exposed APIs |
 
 Request flow: a client calls `GET /hello` with an `Authorization: Bearer <token>` header.
 API Gateway invokes the **Authorizer Lambda** via a `TokenAuthorizer`; if it returns an
@@ -57,6 +58,7 @@ Secrets Manager and queries the RDS PostgreSQL instance over the VPC's private s
 > the free/basic plan. The Business Lambda connects directly to the RDS instance instead.
 
 ## Getting the code
+
 
 ```bash
 git clone https://github.com/teeru1983/AWS-API-CDK.git
@@ -92,6 +94,23 @@ To remove everything:
 
 ```bash
 npx cdk destroy --all
+```
+
+## Optional: WAF (not deployed by default)
+
+`WafStack` adds a regional AWS WAF Web ACL (AWS Managed Core Rule Set) directly on the API
+Gateway stage — no CloudFront required. It's defined in
+[lib/waf-stack.ts](lib/waf-stack.ts) but is **not** part of `cdk deploy --all`; `bin/aws-api-cdk.ts`
+only adds it to the app when explicitly opted in, since **AWS WAF has no free tier** and bills
+from the moment it's created (~$5/month Web ACL + ~$1/month per rule group + $0.60 per
+million requests inspected).
+
+```bash
+# Deploy
+npx cdk deploy WafStack -c enableWaf=true
+
+# Tear down when done, to stop the charge
+npx cdk destroy WafStack -c enableWaf=true
 ```
 
 ## IAM roles used, and why
