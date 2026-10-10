@@ -1,0 +1,21 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/aws-api-cdk.ts",
+  "watch": {
+    "include": [
+      "**"
+    ],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "**/*.d.ts",
+      "**/*.js",
+      "tsconfig.json",
+      "package-lock.json",
+      "node_modules",
+      "cdk.out"
+    ]
+  },
+  "context": {
+    "enableLookups": true
+  }
+}

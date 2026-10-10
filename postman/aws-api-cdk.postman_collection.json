@@ -1,0 +1,322 @@
+{
+  "info": {
+    "name": "AWS API CDK - Employee API",
+    "description": "Tests the deployed API Gateway (/hello) protected by the Lambda TokenAuthorizer, plus direct Lambda invocations (via the AWS Lambda Invoke API) for the Authorizer Lambda and the Business Lambda.\n\nSetup:\n1. Fill in the collection variables `awsAccessKeyId` / `awsSecretAccessKey` (and `awsSessionToken` if using temporary credentials) with IAM credentials that have `lambda:InvokeFunction` permission. These are only needed for the \"Direct Lambda Invoke\" folder.\n2. The `baseUrl` variable already points at the deployed ApiStack endpoint.\n3. `demoToken` can be any string - the authorizer currently accepts any `Bearer <token>` value.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://4l8w14d2bd.execute-api.us-east-1.amazonaws.com/prod",
+      "type": "string"
+    },
+    {
+      "key": "awsRegion",
+      "value": "us-east-1",
+      "type": "string"
+    },
+    {
+      "key": "authorizerFunctionName",
+      "value": "ComputeStack-AuthorizerLambda972EEEAB-YuMSJkDhJFzd",
+      "type": "string"
+    },
+    {
+      "key": "businessFunctionName",
+      "value": "ComputeStack-BusinessLambda91349203-eUR1lW9gIORp",
+      "type": "string"
+    },
+    {
+      "key": "demoToken",
+      "value": "demo-token-123",
+      "type": "string"
+    },
+    {
+      "key": "awsAccessKeyId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "awsSecretAccessKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "awsSessionToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "API Gateway (end-to-end)",
+      "item": [
+        {
+          "name": "GET /hello - Authorized (Bearer token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response has databaseTime', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('databaseTime');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{demoToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/hello",
+              "host": ["{{baseUrl}}"],
+              "path": ["hello"]
+            },
+            "description": "Calls the API through the TokenAuthorizer with a valid 'Bearer <token>' Authorization header, which the authorizer currently always Allows. API Gateway then invokes the Business Lambda."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /hello - Missing Authorization header (expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hello",
+              "host": ["{{baseUrl}}"],
+              "path": ["hello"]
+            },
+            "description": "No Authorization header is sent. API Gateway rejects the request before the authorizer Lambda even runs, since the identity source is missing."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /hello - Non-Bearer token (expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic some-value"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/hello",
+              "host": ["{{baseUrl}}"],
+              "path": ["hello"]
+            },
+            "description": "Authorization header is present but doesn't start with 'Bearer ', so the authorizer Lambda returns a Deny policy."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Direct Lambda Invoke (AWS SigV4)",
+      "description": "Calls the AWS Lambda Invoke API directly (bypassing API Gateway) using AWS Signature auth. Requires IAM credentials with lambda:InvokeFunction permission on these functions.",
+      "item": [
+        {
+          "name": "Invoke Authorizer Lambda - Allow case",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Lambda did not error', function () {",
+                  "    pm.expect(pm.response.headers.get('X-Amz-Function-Error')).to.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "awsv4",
+              "awsv4": [
+                { "key": "accessKey", "value": "{{awsAccessKeyId}}" },
+                { "key": "secretKey", "value": "{{awsSecretAccessKey}}" },
+                { "key": "sessionToken", "value": "{{awsSessionToken}}" },
+                { "key": "region", "value": "{{awsRegion}}" },
+                { "key": "service", "value": "lambda" }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"TOKEN\",\n  \"authorizationToken\": \"Bearer {{demoToken}}\",\n  \"methodArn\": \"arn:aws:execute-api:{{awsRegion}}:*:*/prod/GET/hello\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "https://lambda.{{awsRegion}}.amazonaws.com/2015-03-31/functions/{{authorizerFunctionName}}/invocations",
+              "protocol": "https",
+              "host": ["lambda", "{{awsRegion}}", "amazonaws", "com"],
+              "path": [
+                "2015-03-31",
+                "functions",
+                "{{authorizerFunctionName}}",
+                "invocations"
+              ]
+            },
+            "description": "Sends the real event shape API Gateway uses for a TOKEN-type Lambda authorizer (type/authorizationToken/methodArn)."
+          },
+          "response": []
+        },
+        {
+          "name": "Invoke Authorizer Lambda - Deny case (no token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "awsv4",
+              "awsv4": [
+                { "key": "accessKey", "value": "{{awsAccessKeyId}}" },
+                { "key": "secretKey", "value": "{{awsSecretAccessKey}}" },
+                { "key": "sessionToken", "value": "{{awsSessionToken}}" },
+                { "key": "region", "value": "{{awsRegion}}" },
+                { "key": "service", "value": "lambda" }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"TOKEN\",\n  \"authorizationToken\": \"\",\n  \"methodArn\": \"arn:aws:execute-api:{{awsRegion}}:*:*/prod/GET/hello\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "https://lambda.{{awsRegion}}.amazonaws.com/2015-03-31/functions/{{authorizerFunctionName}}/invocations",
+              "protocol": "https",
+              "host": ["lambda", "{{awsRegion}}", "amazonaws", "com"],
+              "path": [
+                "2015-03-31",
+                "functions",
+                "{{authorizerFunctionName}}",
+                "invocations"
+              ]
+            },
+            "description": "No authorization token supplied; expect a Deny policy document in the response body."
+          },
+          "response": []
+        },
+        {
+          "name": "Invoke Business Lambda directly",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Lambda did not error', function () {",
+                  "    pm.expect(pm.response.headers.get('X-Amz-Function-Error')).to.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "awsv4",
+              "awsv4": [
+                { "key": "accessKey", "value": "{{awsAccessKeyId}}" },
+                { "key": "secretKey", "value": "{{awsSecretAccessKey}}" },
+                { "key": "sessionToken", "value": "{{awsSessionToken}}" },
+                { "key": "region", "value": "{{awsRegion}}" },
+                { "key": "service", "value": "lambda" }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource\": \"/hello\",\n  \"path\": \"/hello\",\n  \"httpMethod\": \"GET\",\n  \"headers\": {\n    \"Authorization\": \"Bearer {{demoToken}}\"\n  },\n  \"requestContext\": {\n    \"authorizer\": {\n      \"userId\": \"demo-user\"\n    }\n  },\n  \"body\": null,\n  \"isBase64Encoded\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "https://lambda.{{awsRegion}}.amazonaws.com/2015-03-31/functions/{{businessFunctionName}}/invocations",
+              "protocol": "https",
+              "host": ["lambda", "{{awsRegion}}", "amazonaws", "com"],
+              "path": [
+                "2015-03-31",
+                "functions",
+                "{{businessFunctionName}}",
+                "invocations"
+              ]
+            },
+            "description": "Simulates the API Gateway proxy-integration event, bypassing API Gateway and the authorizer entirely, to isolate Business Lambda / RDS connectivity issues."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
